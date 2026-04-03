@@ -533,9 +533,7 @@ img {
   align-items: end;
 }
 
-.select-wrap {
-  position: relative;
-}
+
 
 .select-label {
   display: block;
@@ -623,13 +621,22 @@ img {
 }
 
 /* Autocomplete dropdown */
+.select-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+.select-wrap:focus-within {
+  z-index: 10;
+}
+
 .autocomplete-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: var(--dark-card);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--dark);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius);
   max-height: 320px;
   overflow-y: auto;

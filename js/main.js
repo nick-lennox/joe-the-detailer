@@ -81,7 +81,7 @@ window.addEventListener('scroll', () => {
     'genesis', 'gmc', 'honda', 'hyundai', 'infiniti', 'jaguar', 'jeep', 'kia',
     'lamborghini', 'land rover', 'lexus', 'lincoln', 'lucid', 'maserati',
     'mazda', 'mclaren', 'mercedes-benz', 'mini', 'mitsubishi', 'nissan',
-    'polestar', 'porsche', 'ram', 'rivian', 'rolls-royce', 'subaru', 'suzuki',
+    'polestar', 'porsche', 'ram', 'rivian', 'rolls-royce', 'saab', 'subaru', 'suzuki',
     'tesla', 'toyota', 'volkswagen', 'volvo',
   ]);
 
