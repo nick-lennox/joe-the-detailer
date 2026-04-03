@@ -85,8 +85,16 @@ window.addEventListener('scroll', () => {
     'tesla', 'toyota', 'volkswagen', 'volvo',
   ]);
 
+  // Map NHTSA vehicle types to our default pricing tiers
+  const NHTSA_TYPE_DEFAULTS = {
+    'Passenger Car': 'midsize',
+    'Truck': 'fullsize',
+    'Multipurpose Passenger Vehicle (MPV)': 'suv',
+    'Van': 'oversized',
+  };
+
   let allMakes = [];
-  let currentModels = [];
+  let currentModels = [];  // [{name, nhtsaType}]
   let selectedMake = null;
   let selectedModel = null;
   let hasConfettied = false;
@@ -181,6 +189,23 @@ window.addEventListener('scroll', () => {
 
   let filteredMakes = [];
   makeInput.addEventListener('input', () => {
+    // If they're retyping after a selection, reset everything downstream
+    if (selectedMake) {
+      selectedMake = null;
+      makeInput.classList.remove('has-value');
+      selectedModel = null;
+      modelInput.value = '';
+      modelInput.classList.remove('has-value');
+      modelInput.disabled = true;
+      modelInput.placeholder = 'Select a make first...';
+      currentModels = [];
+      fallback.hidden = true;
+      resultEl.hidden = true;
+      tierReveal.classList.remove('show');
+      priceCard.classList.remove('show');
+      priceCard.querySelectorAll('.price-row').forEach(r => r.classList.remove('show'));
+      hasConfettied = false;
+    }
     clearTimeout(makeDebounce);
     makeDebounce = setTimeout(() => {
       filteredMakes = filterMakes(makeInput.value);
@@ -189,7 +214,10 @@ window.addEventListener('scroll', () => {
   });
 
   makeInput.addEventListener('focus', () => {
-    if (!selectedMake && allMakes.length > 0) {
+    if (selectedMake) {
+      makeInput.select();
+    }
+    if (allMakes.length > 0) {
       filteredMakes = filterMakes(makeInput.value);
       renderDropdown(makeDropdown, filteredMakes, selectMake);
     }
@@ -217,47 +245,90 @@ window.addEventListener('scroll', () => {
     priceCard.classList.remove('show');
     priceCard.querySelectorAll('.price-row').forEach(r => r.classList.remove('show'));
 
-    // Fetch models
+    // Fetch models from 3 vehicle type endpoints in parallel
     modelSpinner.hidden = false;
     try {
-      const encoded = encodeURIComponent(selectedMake.name);
-      const res = await fetch(NHTSA_BASE + '/getmodelsformake/' + encoded + '?format=json');
-      const data = await res.json();
-      currentModels = data.Results
-        .map(m => m.Model_Name)
-        .sort((a, b) => a.localeCompare(b));
+      const makeId = selectedMake.id;
+      const year = new Date().getFullYear();
+      const types = ['car', 'truck', 'mpv'];
+      const fetches = types.map(t =>
+        fetch(NHTSA_BASE + '/GetModelsForMakeIdYear/makeId/' + makeId + '/modelyear/' + year + '/vehicletype/' + t + '?format=json')
+          .then(r => r.json())
+          .catch(() => ({ Results: [] }))
+      );
+      const results = await Promise.all(fetches);
+      const seen = new Set();
+      currentModels = [];
+      results.forEach(data => {
+        (data.Results || []).forEach(m => {
+          if (!seen.has(m.Model_Name)) {
+            seen.add(m.Model_Name);
+            currentModels.push({
+              name: m.Model_Name,
+              nhtsaType: m.VehicleTypeName || '',
+            });
+          }
+        });
+      });
+      currentModels.sort((a, b) => a.name.localeCompare(b.name));
     } catch (e) {
       // Fallback from tier map
       const prefix = selectedMake.name.toLowerCase() + ' ';
       currentModels = Object.keys(TIER_MAP)
         .filter(k => k.startsWith(prefix))
         .map(k => k.slice(prefix.length))
-        .map(m => m.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
+        .map(m => ({
+          name: m.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+          nhtsaType: '',
+        }));
     }
     modelSpinner.hidden = true;
     modelInput.placeholder = 'Search model...';
     modelInput.focus();
   }
 
+  function getTierForModel(model) {
+    const key = (selectedMake.name + ' ' + model.name).toLowerCase();
+    // 1. Check local tier map first (most accurate)
+    if (TIER_MAP[key]) return TIER_MAP[key];
+    // 2. Fall back to NHTSA vehicle type
+    if (model.nhtsaType && NHTSA_TYPE_DEFAULTS[model.nhtsaType]) {
+      return NHTSA_TYPE_DEFAULTS[model.nhtsaType];
+    }
+    return null;
+  }
+
+  function tierBadge(model) {
+    const tier = getTierForModel(model);
+    return tier ? PRICING[tier].label : '';
+  }
+
   function filterModels(query) {
     const q = query.toLowerCase().trim();
-    if (q.length < 1) return currentModels.slice(0, 12).map(m => {
-      const key = (selectedMake.name + ' ' + m).toLowerCase();
-      const tier = TIER_MAP[key];
-      return { label: m, value: m, badge: tier ? PRICING[tier].label : '' };
-    });
+    if (q.length < 1) return currentModels.slice(0, 12).map(m => ({
+      label: m.name, value: m, badge: tierBadge(m),
+    }));
     return currentModels
-      .filter(m => m.toLowerCase().includes(q))
+      .filter(m => m.name.toLowerCase().includes(q))
       .slice(0, 10)
-      .map(m => {
-        const key = (selectedMake.name + ' ' + m).toLowerCase();
-        const tier = TIER_MAP[key];
-        return { label: m, value: m, badge: tier ? PRICING[tier].label : '' };
-      });
+      .map(m => ({
+        label: m.name, value: m, badge: tierBadge(m),
+      }));
   }
 
   let filteredModels = [];
   modelInput.addEventListener('input', () => {
+    // If retyping after a selection, clear result
+    if (selectedModel) {
+      selectedModel = null;
+      modelInput.classList.remove('has-value');
+      fallback.hidden = true;
+      resultEl.hidden = true;
+      tierReveal.classList.remove('show');
+      priceCard.classList.remove('show');
+      priceCard.querySelectorAll('.price-row').forEach(r => r.classList.remove('show'));
+      hasConfettied = false;
+    }
     clearTimeout(modelDebounce);
     modelDebounce = setTimeout(() => {
       filteredModels = filterModels(modelInput.value);
@@ -266,7 +337,10 @@ window.addEventListener('scroll', () => {
   });
 
   modelInput.addEventListener('focus', () => {
-    if (!selectedModel && currentModels.length > 0) {
+    if (selectedModel) {
+      modelInput.select();
+    }
+    if (currentModels.length > 0) {
       filteredModels = filterModels(modelInput.value);
       renderDropdown(modelDropdown, filteredModels, selectModel);
     }
@@ -277,13 +351,12 @@ window.addEventListener('scroll', () => {
   // --- Select model -> show pricing ---
   function selectModel(item) {
     selectedModel = item.value;
-    modelInput.value = selectedModel;
+    modelInput.value = selectedModel.name;
     modelInput.classList.add('has-value');
     modelDropdown.hidden = true;
 
-    const vehicleName = selectedMake.name + ' ' + selectedModel;
-    const key = vehicleName.toLowerCase();
-    const tier = TIER_MAP[key];
+    const vehicleName = selectedMake.name + ' ' + selectedModel.name;
+    const tier = getTierForModel(selectedModel);
 
     if (tier) {
       fallback.hidden = true;
