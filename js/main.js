@@ -74,6 +74,17 @@ window.addEventListener('scroll', () => {
   const NHTSA_BASE = 'https://vpic.nhtsa.dot.gov/api/vehicles';
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Curated list of consumer car brands
+  const KNOWN_MAKES = new Set([
+    'acura', 'alfa romeo', 'aston martin', 'audi', 'bentley', 'bmw', 'buick',
+    'cadillac', 'chevrolet', 'chrysler', 'dodge', 'ferrari', 'fiat', 'ford',
+    'genesis', 'gmc', 'honda', 'hyundai', 'infiniti', 'jaguar', 'jeep', 'kia',
+    'lamborghini', 'land rover', 'lexus', 'lincoln', 'lucid', 'maserati',
+    'mazda', 'mclaren', 'mercedes-benz', 'mini', 'mitsubishi', 'nissan',
+    'polestar', 'porsche', 'ram', 'rivian', 'rolls-royce', 'subaru', 'suzuki',
+    'tesla', 'toyota', 'volkswagen', 'volvo',
+  ]);
+
   let allMakes = [];
   let currentModels = [];
   let selectedMake = null;
@@ -144,6 +155,7 @@ window.addEventListener('scroll', () => {
       const res = await fetch(NHTSA_BASE + '/getallmakes?format=json');
       const data = await res.json();
       allMakes = data.Results
+        .filter(m => KNOWN_MAKES.has(m.Make_Name.toLowerCase()))
         .map(m => ({ id: m.Make_ID, name: m.Make_Name }))
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch (e) {
